@@ -97,13 +97,3 @@ async def login_user(form : Annotated[OAuth2PasswordRequestForm, Depends()], db 
 
     return {"access_token": token, "token_type": "bearer"}
 
-@router.get("/current_user")
-async def get_current_user(user : Annotated[dict, Depends(get_current_user)], db : db_dependency):
-
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed")
-
-    user_id = user.get("user_id")
-
-    user_found = db.query(User).filter(User.id == user_id).first()
-    return user_found
