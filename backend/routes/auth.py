@@ -1,20 +1,21 @@
 from fastapi import APIRouter, status, HTTPException, Depends
 from model.database import SessionLocal
+from typing import Annotated
 from model.User import UserRequest
 from sqlalchemy.orm import Session
-from typing import Annotated
 from model.models import User
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from datetime import timedelta, datetime, timezone
 from jose import jwt, JWTError
 import os
+import ollama
 from dotenv import load_dotenv
-
 router = APIRouter(
     prefix="/auth",
     tags=["auth"]
 )
+
 load_dotenv()
 
 def get_db():
@@ -31,7 +32,7 @@ db_dependency = Annotated[Session, Depends(get_db)]
 bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_bearer = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-
+model_name = "qwen2.5:1.5b"
 ######Html pages
 
 #####User authentication functions
@@ -93,7 +94,9 @@ async def login_user(form : Annotated[OAuth2PasswordRequestForm, Depends()], db 
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed")
 
-    token = create_access_token(user.username, user.id, user.role, timedelta(minutes=10))
+    token = create_access_token(user.username, user.id, user.role, timedelta(hours=5))
 
     return {"access_token": token, "token_type": "bearer"}
+
+
 

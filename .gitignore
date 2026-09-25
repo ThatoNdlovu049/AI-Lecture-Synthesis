@@ -1,2 +1,8 @@
-/fastapienv/
-/.env
+
+backend/temp/
+backend/output/
+backend/uploads/
+backend/Wav2Lip/checkpoints/*.pth
+backend/Wav2Lip/face_detection/detection/sfd/*.pth
+backend/Wav2Lip/results/
+backend/Wav2Lip/temp/

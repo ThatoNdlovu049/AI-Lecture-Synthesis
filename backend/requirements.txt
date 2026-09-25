@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+sqlAlchemy
+passlib
+bcrypt==4.0.1
+python-multipart
+python-jose[cryptography]
+pytest-asyncio
+torch
+torchaudio
+chatterbox-tts
+setuptools<81
+assemblyai
+python-docx
+ollama
+PyPDF2
