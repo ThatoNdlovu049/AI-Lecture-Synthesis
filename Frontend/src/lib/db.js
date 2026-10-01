@@ -100,8 +100,10 @@ const fetchUser = async (token) => {
         Authorization: `Bearer ${token}`
       }
     })
-    console.log(response.data)
-    const user = response.data;
+    // The backend sends first_name / last_name; the pages read firstName / surname.
+    // The password hash is left out so it is never kept in the browser.
+    const { password, ...data } = response.data;
+    const user = { ...data, firstName: data.first_name, surname: data.last_name };
     return {ok: true, "user": user};
 
   }catch(error){
@@ -122,7 +124,71 @@ const sendData = async ( data, token ) => {
     return {ok: true, data: response.data}
   }catch (error){
     console.log('Error sending video and materials to fastapi', error)
-    return {ok: false, error: 'Error sending video and materials'}
+    const detail = error.response?.data?.detail
+    return {ok: false, error: typeof detail === 'string' ? detail : 'Error sending video and materials'}
+  }
+}
+
+// ---------- Lecture generation jobs ----------
+// POST /ai/upload only queues the lecture; a separate backend worker builds it.
+// These check on the job until it is done or has failed.
+
+const getJob = async ( jobId, token ) => {
+  try{
+    const response = await axios.get(`${api_url}/ai/jobs/${jobId}`, {
+      headers:{
+        Authorization: `Bearer ${token}`
+      }
+    });
+    return {ok: true, data: response.data}
+  }catch (error){
+    const code = error.response?.status
+    return {
+      ok: false,
+      // no reply or a server error: the backend may be restarting, so try again
+      retry: !code || code >= 500,
+      error: code === 404 ? 'This lecture job was not found.' : 'Could not check the lecture status.',
+    }
+  }
+}
+
+const jobWatchers = new Map() // jobId -> { listeners, promise }
+
+const waitForJob = ( jobId, token, onUpdate ) => {
+  let watcher = jobWatchers.get(jobId)
+  if (!watcher) {
+    watcher = { listeners: new Set() }
+    watcher.promise = (async () => {
+      while (true) {
+        const result = await getJob(jobId, token)
+        if (result.ok) {
+          watcher.listeners.forEach((listener) => listener(result.data))
+          if (result.data.status === 'done' || result.data.status === 'failed') {
+            return result.data
+          }
+        } else if (!result.retry) {
+          return { status: 'failed', error: result.error }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 5000))
+      }
+    })().finally(() => jobWatchers.delete(jobId))
+    jobWatchers.set(jobId, watcher)
+  }
+  if (onUpdate) watcher.listeners.add(onUpdate)
+  return watcher.promise
+}
+
+const askChatbot = async ( question, course, token ) => {
+  try{
+    const response = await axios.post(`${api_url}/ai/ask`, { question, course }, {
+      headers:{
+        Authorization: `Bearer ${token}`
+      }
+    });
+    return {ok: true, answer: response.data.answer}
+  }catch (error){
+    console.log('Error asking the chatbot', error)
+    return {ok: false, error: 'Sorry, I could not reach the AI Lecturer. Please try again.'}
   }
 }
 
@@ -235,4 +301,4 @@ export function saveStudentCourse(course) {
   return course
 }
 
-export{ registerUser, fetchUser, loginUser, sendData, api_url }
+export{ registerUser, fetchUser, loginUser, sendData, getJob, waitForJob, askChatbot, api_url }

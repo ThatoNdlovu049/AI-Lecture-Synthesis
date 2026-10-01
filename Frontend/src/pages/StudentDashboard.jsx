@@ -10,6 +10,8 @@ import {
   saveChatHistory,
   saveStudentCourse,
   sendData,
+  waitForJob,
+  askChatbot,
   api_url,
 } from '../lib/db.js'
 import UploadField from '../components/UploadField.jsx'
@@ -50,19 +52,23 @@ export default function StudentDashboard() {
   const [courseSource, setCourseSource] = useState('lecturer') // 'lecturer' | 'own'
   const [messages, setMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
+  const [thinking, setThinking] = useState(false)
 
+  // Runs when a different lecture is opened (not when the same lecture's
+  // video finishes generating), so the chat is not reset mid-conversation.
+  const activeCourseName = activeCourse?.name
   useEffect(() => {
-    if (!activeCourse) return
-    recordCourseAccess(currentUser.id, activeCourse.name)
+    if (!activeCourseName) return
+    recordCourseAccess(currentUser.id, activeCourseName)
     setProgressList(getStudentProgress(currentUser.id))
 
-    const saved = getChatHistory(currentUser.id, activeCourse.name)
+    const saved = getChatHistory(currentUser.id, activeCourseName)
     setMessages(
       saved.length > 0
         ? saved
         : [{ role: 'bot', text: 'Ask me anything about this lecture.' }]
     )
-  }, [activeCourse, currentUser.id])
+  }, [activeCourseName, currentUser.id])
 
   // Checks lecturer-published courses first, then this student's own
   // generated ones - so clicking a "courses in progress" entry works
@@ -109,65 +115,119 @@ export default function StudentDashboard() {
   formData.append('video', video)
   materials.forEach((file) => formData.append('materials', file))
   formData.append('audio_sample', audio)
-  
-  try{
-    const response = await sendData(formData, token)
 
-    if (!response.ok) {
-      setError(response.error)
-      return
-      
-    }
-    const course = saveStudentCourse({
+  // Open the lecture screen straight away with a loading state, so the
+  // chatbot can be used while the backend builds the video.
+  const pending = saveStudentCourse({
     name: trimmedName,
     studentId: currentUser.id,
     videoFileName: video.name,
     materialCount: materials.length,
     audio_name: audio.name,
-    lectureFileName: response.data.lectureFileName,
-    slidesFileName: response.data.slidesFileName,
-    videoUrl: response.data.videoUrl,
+    lectureFileName: trimmedName,
+    slidesFileName: '',
+    status: 'generating',
     createdAt: new Date().toISOString(),
   })
 
-    setNewName('')
-    setVideo(null)
-    setMaterials([])
-    setAudio(null)
+  setNewName('')
+  setVideo(null)
+  setMaterials([])
+  setAudio(null)
 
-    setCourseSource('own')
-    setActiveCourse(course)
-    setScreen('course')
+  setCourseSource('own')
+  setActiveCourse(pending)
+  setScreen('course')
+
+  try{
+    // Uploads the files; the backend queues the lecture and answers straight away
+    const response = await sendData(formData, token)
+
+    if (!response.ok) {
+      showIfOpen(saveStudentCourse({ ...pending, status: 'failed', error: response.error }))
+      return
+    }
+
+    if (response.data.videoUrl) {
+      showIfOpen(finishCourse(pending, response.data))
+      return
+    }
+
+    const queued = saveStudentCourse({ ...pending, jobId: response.data.jobId, step: response.data.step })
+    showIfOpen(queued)
+    trackJob(queued)
 
   }catch(err){
-    setError('Something went wrong. Please try again....')
+    showIfOpen(saveStudentCourse({ ...pending, status: 'failed', error: 'Something went wrong. Please try again....' }))
   }finally{
     setGenerating(false)
   }
-    
+
 
 }
 
-  function sendMessage() {
-    if (!chatInput.trim() || !activeCourse) return
+  // Swap in the updated course if the student is still viewing it
+  function showIfOpen(course) {
+    setActiveCourse((current) =>
+      current && current.name === course.name ? course : current
+    )
+  }
 
-    const next = [...messages, { role: 'user', text: chatInput }]
+  function finishCourse(course, job) {
+    return saveStudentCourse({
+      ...course,
+      lectureFileName: job.lectureFileName,
+      slidesFileName: job.slidesFileName,
+      videoUrl: job.videoUrl,
+      status: 'ready',
+      step: undefined,
+    })
+  }
+
+  // Follows a queued lecture until the backend worker has finished it
+  function trackJob(course) {
+    waitForJob(course.jobId, token, (job) => {
+      if (job.status === 'queued' || job.status === 'running') {
+        showIfOpen(saveStudentCourse({ ...course, step: job.step }))
+      }
+    }).then((job) => {
+      if (job.status === 'done') {
+        showIfOpen(finishCourse(course, job))
+      } else {
+        showIfOpen(saveStudentCourse({ ...course, status: 'failed', error: job.error }))
+      }
+    })
+  }
+
+  // Opening a lecture that is still being generated (for example after a page
+  // reload) picks up its progress again
+  const activeCourseStatus = activeCourse?.status
+  useEffect(() => {
+    if (courseSource === 'own' && activeCourseStatus === 'generating' && activeCourse?.jobId) {
+      trackJob(activeCourse)
+    }
+  }, [activeCourseName, activeCourseStatus, courseSource])
+
+  async function sendMessage() {
+    if (!chatInput.trim() || !activeCourse || thinking) return
+
+    const question = chatInput
+    const next = [...messages, { role: 'user', text: question }]
     setChatInput('')
-    setMessages(next)
+    setMessages([...next, { role: 'bot', text: 'Thinking…' }])
     saveChatHistory(currentUser.id, activeCourse.name, next)
 
-    // thato API work here too - can make changes to this section
-    setTimeout(() => {
-      const withReply = [
-        ...next,
-        {
-          role: 'bot',
-          text: `(Once the chatbot backend is connected, this is where the answer about ${activeCourse.name} will appear.)`,
-        },
-      ]
-      setMessages(withReply)
-      saveChatHistory(currentUser.id, activeCourse.name, withReply)
-    }, 500)
+    // Ask the backend chatbot (POST /ai/ask), which answers with the local Llama model
+    setThinking(true)
+    const result = await askChatbot(question, activeCourse.name, token)
+    setThinking(false)
+
+    const withReply = [
+      ...next,
+      { role: 'bot', text: result.ok ? result.answer : result.error },
+    ]
+    setMessages(withReply)
+    saveChatHistory(currentUser.id, activeCourse.name, withReply)
   }
 
   function goHome() {
@@ -404,11 +464,30 @@ export default function StudentDashboard() {
         <div className="aspect-video rounded-xl bg-navy flex items-center justify-center border-2 border-navy/15 overflow-hidden">
           {activeCourse.videoUrl ? (
             <video src={`${api_url}${activeCourse.videoUrl}`} controls className='w-full h-full' />
+          ) : activeCourse.status === 'generating' && (activeCourse.jobId || generating) ? (
+            <div className="flex flex-col items-center gap-4 text-center px-6">
+              <div className="h-10 w-10 rounded-full border-4 border-white/20 border-t-white animate-spin" />
+              <span className="text-white text-sm">Generating your lecture…</span>
+              <span className="text-white/70 text-xs">
+                {activeCourse.step || 'Uploading your files'}
+              </span>
+              <span className="text-white/50 text-xs max-w-sm">
+                This can take several minutes. You can ask the chatbot questions while you wait.
+              </span>
+            </div>
+          ) : activeCourse.status === 'generating' ? (
+            <span className="text-white/50 text-sm text-center px-6">
+              The upload was interrupted (the page was reloaded). Please generate this lecture again from the dashboard.
+            </span>
+          ) : activeCourse.status === 'failed' ? (
+            <span className="text-white/70 text-sm text-center px-6">
+              Could not generate the lecture: {activeCourse.error}. Please try again from the dashboard.
+            </span>
           ) : (
             <span className="text-white/50 text-sm">
               {activeCourse.lectureFileName} — video player
             </span>
-          )} 
+          )}
         </div>
 
         <div>

@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
-import { getCoursesByLecturer, saveCourse } from '../lib/db.js'
+import { getCoursesByLecturer, saveCourse, sendData, waitForJob } from '../lib/db.js'
 import UploadField from '../components/UploadField.jsx'
 
 export default function LecturerDashboard() {
-  const { currentUser } = useAuth()
+  const { currentUser, token } = useAuth()
   const [courses, setCourses] = useState(() =>
     getCoursesByLecturer(currentUser.id)
   )
@@ -13,21 +13,36 @@ export default function LecturerDashboard() {
   const [materials, setMaterials] = useState([])
   const [video, setVideo] = useState (null)
   const [images, setImages] = useState([])
+  const [audio, setAudio] = useState(null)
   const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState('')
 
-  const canGenerate = courseName.trim() && materials.length && video > 0 && !generating
+  const canGenerate = Boolean(courseName.trim() && materials.length > 0 && video && audio && !generating)
 
-  function handleGenerate(e) {
+  async function handleGenerate(e) {
     e.preventDefault()
     const trimmedName = courseName.trim()
-    if (!trimmedName) return
+    if (!trimmedName || !video || !audio || !materials.length) return
 
     setGenerating(true)
+    setError('')
 
-    /* For Thato!!NB, this was bascially like a temp stand in to check if it works
-    so you'll have to replace with a real call which will be your API... get me? (e.g. POST
-    generate-video with the uploaded materials/images).*/
-    setTimeout(() => {
+    // Same backend call as the student page: POST /ai/upload builds the lecture video.
+    // Images are not used by the backend yet, so they are not sent.
+    const formData = new FormData()
+    formData.append('video', video)
+    materials.forEach((file) => formData.append('materials', file))
+    formData.append('audio_sample', audio)
+
+    try {
+      // Uploads the files; the backend queues the lecture and answers straight away
+      const response = await sendData(formData, token)
+
+      if (!response.ok) {
+        setError(response.error)
+        return
+      }
+
       const course = saveCourse({
         name: trimmedName,
         lecturerId: currentUser.id,
@@ -36,21 +51,56 @@ export default function LecturerDashboard() {
         materialCount: materials.length,
         videoFileName: video.name,
         imageCount: images.length,
+        videoUrl: response.data.videoUrl || undefined,
+        status: response.data.videoUrl ? 'ready' : 'generating',
+        jobId: response.data.jobId,
+        step: response.data.step,
         createdAt: new Date().toISOString(),
       })
 
-      setCourses((prev) => [
-        ...prev.filter((c) => c.name !== course.name),
-        course,
-      ])
+      showCourse(course)
+      if (course.status === 'generating') trackJob(course)
 
       setCourseName('')
       setMaterials([])
       setVideo(null)
       setImages([])
+      setAudio(null)
+    } catch {
+      setError('Something went wrong. Please try again....')
+    } finally {
       setGenerating(false)
-    }, 1200)
+    }
   }
+
+  function showCourse(course) {
+    setCourses((prev) => [
+      ...prev.filter((c) => c.name !== course.name),
+      course,
+    ])
+  }
+
+  // Follows a queued lecture until the backend worker has finished it
+  function trackJob(course) {
+    waitForJob(course.jobId, token, (job) => {
+      if (job.status === 'queued' || job.status === 'running') {
+        showCourse(saveCourse({ ...course, step: job.step }))
+      }
+    }).then((job) => {
+      if (job.status === 'done') {
+        showCourse(saveCourse({ ...course, videoUrl: job.videoUrl, status: 'ready', step: undefined }))
+      } else {
+        showCourse(saveCourse({ ...course, status: 'failed', error: job.error }))
+      }
+    })
+  }
+
+  // Picks up lectures that were still generating when the page was last open
+  useEffect(() => {
+    courses
+      .filter((c) => c.status === 'generating' && c.jobId)
+      .forEach(trackJob)
+  }, [])
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-10">
@@ -90,6 +140,16 @@ export default function LecturerDashboard() {
                     Source video: {course.videoFileName}
                   </p>
                 )}
+                {course.status === 'generating' && (
+                  <p className="text-xs text-teal-deep mt-1">
+                    Generating… {course.step}
+                  </p>
+                )}
+                {course.status === 'failed' && (
+                  <p className="text-xs text-red-600 mt-1">
+                    Failed: {course.error}
+                  </p>
+                )}
               </div>
             ))}
           </div>
@@ -127,6 +187,13 @@ export default function LecturerDashboard() {
         />
 
         <UploadField
+          label="Audio sample"
+          hint="~5 seconds audio sample"
+          accept="audio/*, .mp4, .m4a"
+          onFileSelect={setAudio}
+        />
+
+        <UploadField
           label="Images"
           hint="OPTIONAL"
           accept="image/*"
@@ -134,6 +201,7 @@ export default function LecturerDashboard() {
           onFilesSelect={setImages}
         />
 
+        {error && <p className="text-sm text-red-600">{error}</p>}
         <button
           type="submit"
           disabled={!canGenerate}

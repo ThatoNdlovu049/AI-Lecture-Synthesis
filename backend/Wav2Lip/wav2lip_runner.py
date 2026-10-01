@@ -30,6 +30,14 @@ _model = None  # loaded once, cached globally
 
 
 def _load_checkpoint(checkpoint_path):
+    # The current official wav2lip_gan.pth download is a TorchScript archive;
+    # take its weights so the rest of the loader works unchanged.
+    try:
+        scripted = torch.jit.load(checkpoint_path, map_location=device)
+        return {"state_dict": scripted.state_dict()}
+    except RuntimeError:
+        pass
+
     if device == 'cuda':
         checkpoint = torch.load(checkpoint_path)
     else:

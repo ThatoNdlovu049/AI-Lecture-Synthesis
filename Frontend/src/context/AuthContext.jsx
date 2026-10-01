@@ -9,15 +9,24 @@ export function AuthProvider({ children }) {
   
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [currentUser, setCurrentUser] = useState('');
+  // true while a saved token is being checked, so protected pages wait instead of redirecting
+  const [loading, setLoading] = useState(Boolean(localStorage.getItem('token')));
   const navigate = useNavigate();
 
   useEffect(() => {
-    
+
     if(token){
       const getUser = async () => {
-        
+
         const user = await fetchUser(token);
-        setCurrentUser(user.user);
+        if (user.ok) {
+          setCurrentUser(user.user);
+        } else {
+          // saved token expired or invalid
+          setToken(null);
+          localStorage.removeItem('token');
+        }
+        setLoading(false);
       };
       getUser();
     }
@@ -49,7 +58,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ currentUser, register, login, logout, token }}>
+    <AuthContext.Provider value={{ currentUser, register, login, logout, token, loading }}>
       {children}
     </AuthContext.Provider>
   )
