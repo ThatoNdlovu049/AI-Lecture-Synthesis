@@ -2,8 +2,11 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 
 export default function ProtectedRoute({ role, children }) {
-  const { currentUser } = useAuth()
+  const { currentUser, loading } = useAuth()
 
+  if (loading) {
+    return null
+  }
 
   if (!currentUser) {
     return <Navigate to={role ? `/login/${role}` : '/'} replace />

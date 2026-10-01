@@ -1,0 +1,19 @@
+# Dependencies and build output (recreated by npm install / npm run build)
+node_modules/
+dist/
+dist-ssr/
+
+# Local environment files
+.env
+.env.*
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor and OS files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

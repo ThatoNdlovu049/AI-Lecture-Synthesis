@@ -1,2 +1,6 @@
 /fastapienv/
 /.env
+/.env.*
+/jobs/
+/worker.log
+/worker.lock
