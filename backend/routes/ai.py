@@ -17,6 +17,7 @@ import re
 from docx import Document
 import assemblyai as ai
 import subprocess
+import fitz  # PyMuPDF - used to render PDF pages as slide images
 router = APIRouter(
     prefix="/ai",
     tags=["ai"]
@@ -190,6 +191,109 @@ async def burn_subtitles(video_path : str, srt : str, output_path : str, font_si
 
     return output_path
 
+def generate_slides_from_materials(materials_content: list[dict], out_dir: str) -> list[str]:
+    """
+    Turns every PDF in the uploaded materials into slide images, one
+    image per page, saved into out_dir. Returns the saved filenames
+    in reading order (so slide 1 is the first page of the first PDF,
+    and so on). .docx materials are skipped here - they still feed
+    the lecture script text, but a Word file has no fixed "pages" to
+    turn into slides the way a PDF does.
+    """
+    os.makedirs(out_dir, exist_ok=True)
+    filenames = []
+    page_counter = 0
+
+    for material in materials_content:
+        filename = material["filename"].lower()
+        if not filename.endswith(".pdf"):
+            continue
+
+        pdf = fitz.open(stream=material["content"], filetype="pdf")
+        for page in pdf:
+            # zoom=2 roughly doubles the resolution so slides stay
+            # readable on a larger screen, without the file being huge
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+            page_filename = f"page_{page_counter}.png"
+            pixmap.save(os.path.join(out_dir, page_filename))
+            filenames.append(page_filename)
+            page_counter += 1
+        pdf.close()
+
+    return filenames
+
+
+def srt_timestamp_to_seconds(timestamp: str) -> float:
+    """Converts an SRT timestamp like '00:01:23,456' into 83.456 seconds."""
+    hms, millis = timestamp.split(",")
+    hours, minutes, seconds = hms.split(":")
+    return (
+        int(hours) * 3600
+        + int(minutes) * 60
+        + int(seconds)
+        + int(millis) / 1000
+    )
+
+
+def parse_srt(srt_path: str) -> list[dict]:
+    """
+    Reads a .srt subtitle file and turns it into a list of cues:
+    [{"start": 0.0, "end": 2.3, "text": "..."}, ...]
+    This is the same timing AssemblyAI generated for the burned-in
+    video subtitles - reusing it here is what "links" the slide
+    timestamps to the subtitles instead of guessing new ones.
+    """
+    with open(srt_path, "r", encoding="utf-8") as f:
+        blocks = f.read().strip().split("\n\n")
+
+    cues = []
+    for block in blocks:
+        lines = block.strip().splitlines()
+        if len(lines) < 3:
+            continue  # skip any malformed/empty block
+
+        time_line = lines[1]  # e.g. "00:00:00,000 --> 00:00:02,400"
+        start_str, end_str = [t.strip() for t in time_line.split("-->")]
+        text = " ".join(lines[2:]).strip()
+
+        cues.append({
+            "start": srt_timestamp_to_seconds(start_str),
+            "end": srt_timestamp_to_seconds(end_str),
+            "text": text,
+        })
+
+    return cues
+
+
+def distribute_slide_timestamps(slide_count: int, cues: list[dict]) -> list[float]:
+    """
+    Decides WHEN each slide should appear, using the subtitle cues
+    as the source of truth (this is the "timestamps in the AI-generated
+    script" requirement from the project charter).
+
+    The subtitle cues are split into `slide_count` roughly-equal,
+    consecutive chunks - e.g. 12 cues and 3 slides gives chunks of
+    4 cues each. Each slide's timestamp is the START time of the
+    first cue in its chunk, so a slide always appears exactly when
+    its matching stretch of narration begins.
+    """
+    if slide_count == 0:
+        return []
+
+    if not cues:
+        # No subtitle timing available (e.g. transcription failed) -
+        # fall back to spacing slides 10 seconds apart.
+        return [i * 10.0 for i in range(slide_count)]
+
+    chunk_size = max(1, len(cues) // slide_count)
+    timestamps = []
+    for i in range(slide_count):
+        cue_index = min(i * chunk_size, len(cues) - 1)
+        timestamps.append(round(cues[cue_index]["start"], 2))
+
+    return timestamps
+
+
 @router.on_event("startup")
 async def startup():
     #wav2lip model load-up at startup
@@ -269,7 +373,35 @@ async def upload_slides(user : user_dependency, video : UploadFile, audio_sample
 
     video_filename = os.path.basename(final_video_path)
 
-    return {"lectureFileName": "Lecture 1", "slidesFileName": "Slides 1", "videoUrl": f"/results/{video_filename}"}
+    # --- Interactive slide system -----------------------------------
+    # 1. Turn each uploaded PDF's pages into slide images.
+    # 2. Parse the subtitle file's real timestamps (already generated
+    #    above for the burned-in captions).
+    # 3. Use those same timestamps to decide when each slide appears,
+    #    so the slides are directly linked to the subtitles/script timing.
+    slide_batch_id = str(uuid.uuid4())
+    slides_dir = os.path.join("output", "slides", slide_batch_id)
+    slide_filenames = generate_slides_from_materials(materials_content, slides_dir)
+
+    subtitle_cues = parse_srt(srt_path)
+    slide_timestamps = distribute_slide_timestamps(len(slide_filenames), subtitle_cues)
+
+    slides_payload = [
+        {"url": f"/slides/{slide_batch_id}/{fname}", "time": t}
+        for fname, t in zip(slide_filenames, slide_timestamps)
+    ]
+    subtitles_payload = [
+        {"start": c["start"], "end": c["end"], "text": c["text"]}
+        for c in subtitle_cues
+    ]
+
+    return {
+        "lectureFileName": "Lecture 1",
+        "slidesFileName": "Slides 1",
+        "videoUrl": f"/results/{video_filename}",
+        "slides": slides_payload,
+        "subtitles": subtitles_payload,
+    }
 @router.post("/script")
 async def check_generated_lecture(file : UploadFile, language : str):
 

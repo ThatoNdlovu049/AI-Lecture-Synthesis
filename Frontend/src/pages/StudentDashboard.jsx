@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
   getChatHistory,
@@ -13,6 +13,7 @@ import {
   api_url,
 } from '../lib/db.js'
 import UploadField from '../components/UploadField.jsx'
+import InteractiveSlideSystem from '../components/InteractiveSlideSystem.jsx'
 
 export default function StudentDashboard() {
   const { currentUser } = useAuth()
@@ -50,6 +51,7 @@ export default function StudentDashboard() {
   const [courseSource, setCourseSource] = useState('lecturer') // 'lecturer' | 'own'
   const [messages, setMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
+  const videoRef = useRef(null) // shared with InteractiveSlideSystem below
 
   useEffect(() => {
     if (!activeCourse) return
@@ -127,6 +129,8 @@ export default function StudentDashboard() {
     lectureFileName: response.data.lectureFileName,
     slidesFileName: response.data.slidesFileName,
     videoUrl: response.data.videoUrl,
+    slides: response.data.slides,
+    subtitles: response.data.subtitles,
     createdAt: new Date().toISOString(),
   })
 
@@ -403,7 +407,7 @@ export default function StudentDashboard() {
 
         <div className="aspect-video rounded-xl bg-navy flex items-center justify-center border-2 border-navy/15 overflow-hidden">
           {activeCourse.videoUrl ? (
-            <video src={`${api_url}${activeCourse.videoUrl}`} controls className='w-full h-full' />
+            <video ref={videoRef} src={`${api_url}${activeCourse.videoUrl}`} controls className='w-full h-full' />
           ) : (
             <span className="text-white/50 text-sm">
               {activeCourse.lectureFileName} — video player
@@ -415,9 +419,11 @@ export default function StudentDashboard() {
           <h2 className="font-display text-sm mb-2">
             {activeCourse.slidesFileName}
           </h2>
-          <div className="aspect-[4/3] max-w-md rounded-lg bg-paper border-2 border-navy/15 flex items-center justify-center">
-            <span className="text-ink/30 text-sm">Slide view</span>
-          </div>
+          <InteractiveSlideSystem
+            videoRef={videoRef}
+            slides={activeCourse.slides}
+            subtitles={activeCourse.subtitles}
+          />
         </div>
       </div>
 

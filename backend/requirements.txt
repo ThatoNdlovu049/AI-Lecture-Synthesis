@@ -14,3 +14,4 @@ assemblyai
 python-docx
 ollama
 PyPDF2
+PyMuPDF
