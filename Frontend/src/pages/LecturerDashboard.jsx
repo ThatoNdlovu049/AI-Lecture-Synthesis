@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
-import { getCoursesByLecturer, saveCourse } from '../lib/db.js'
+import { getCoursesByLecturer, saveCourse, sendData } from '../lib/db.js'
 import UploadField from '../components/UploadField.jsx'
 
 export default function LecturerDashboard() {
-  const { currentUser } = useAuth()
+  const { currentUser, token } = useAuth()
   const [courses, setCourses] = useState(() =>
     getCoursesByLecturer(currentUser.id)
   )
@@ -12,45 +12,68 @@ export default function LecturerDashboard() {
   const [courseName, setCourseName] = useState('')
   const [materials, setMaterials] = useState([])
   const [video, setVideo] = useState (null)
-  const [images, setImages] = useState([])
+  const [audio, setAudio] = useState(null)
   const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState('')
 
-  const canGenerate = courseName.trim() && materials.length && video > 0 && !generating
+  const canGenerate = Boolean( courseName.trim() && materials.length > 0 && video && audio && !generating )
 
-  function handleGenerate(e) {
-    e.preventDefault()
-    const trimmedName = courseName.trim()
-    if (!trimmedName) return
+  async function handleGenerate(e) {
+  e.preventDefault()
+  const trimmedName = courseName.trim()
+  if (!trimmedName) return
+  if (!video) return
+  if (!materials.length) return
+  if (!audio) return
 
-    setGenerating(true)
+  setGenerating(true)
+  setError('')
 
-    /* For Thato!!NB, this was bascially like a temp stand in to check if it works
-    so you'll have to replace with a real call which will be your API... get me? (e.g. POST
-    generate-video with the uploaded materials/images).*/
-    setTimeout(() => {
-      const course = saveCourse({
-        name: trimmedName,
-        lecturerId: currentUser.id,
-        lectureFileName: `${trimmedName} Lecture`,
-        slidesFileName: `${trimmedName} Slides`,
-        materialCount: materials.length,
-        videoFileName: video.name,
-        imageCount: images.length,
-        createdAt: new Date().toISOString(),
-      })
+  const formData = new FormData()
+  formData.append('video', video)
+  materials.forEach((file) => formData.append('materials', file))
+  formData.append('audio_sample', audio)
+  
+  try{
+    const response = await sendData(formData, token)
 
-      setCourses((prev) => [
+    if (!response.ok) {
+      setError(response.error)
+      return
+      
+    }
+    const course = saveCourse({
+    name: trimmedName,
+    lecturerId: currentUser.id,
+    videoFileName: video.name,
+    materialCount: materials.length,
+    audio_name: audio.name,
+    lectureFileName: response.data.lectureFileName,
+    slidesFileName: response.data.slidesFileName,
+    videoUrl: response.data.videoUrl,
+    slides: response.data.slides,
+    subtitles: response.data.subtitles,
+    createdAt: new Date().toISOString(),
+  })
+
+    setCourses((prev) => [
         ...prev.filter((c) => c.name !== course.name),
         course,
       ])
+  
+    setCourseName('')
+    setMaterials([])
+    setVideo(null)
+    setAudio(null)
+    setGenerating(false)
 
-      setCourseName('')
-      setMaterials([])
-      setVideo(null)
-      setImages([])
-      setGenerating(false)
-    }, 1200)
+  }catch(err){
+    console.log(err)
+    setError('Something went wrong. Please try again....')
+  }finally{
+    setGenerating(false)
   }
+}
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-10">
@@ -114,7 +137,7 @@ export default function LecturerDashboard() {
         <UploadField
           label="Course materials / notes"
           hint="MULTIPLE FILES"
-          accept=".pdf,.doc,.docx,.txt"
+          accept=".pdf,.docx"
           multiple
           onFilesSelect={setMaterials}
         />
@@ -127,12 +150,13 @@ export default function LecturerDashboard() {
         />
 
         <UploadField
-          label="Images"
-          hint="OPTIONAL"
-          accept="image/*"
-          multiple
-          onFilesSelect={setImages}
+          label="Audio sample"
+          hint="~5 seconds audio sample"
+          accept="audio/*,.mp4,.m4a"
+          onFileSelect={setAudio}
         />
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
 
         <button
           type="submit"

@@ -144,6 +144,7 @@ export default function StudentDashboard() {
     setScreen('course')
 
   }catch(err){
+    console.log(err)
     setError('Something went wrong. Please try again....')
   }finally{
     setGenerating(false)
@@ -354,7 +355,7 @@ export default function StudentDashboard() {
           <UploadField
             label="Your materials / notes"
             hint="MULTIPLE FILES"
-            accept=".pdf,.docx,.txt"
+            accept=".pdf,.docx"
             multiple
             onFilesSelect={setMaterials}
           />
@@ -365,7 +366,9 @@ export default function StudentDashboard() {
             accept="audio/*, .mp4, .m4a"
             onFileSelect={setAudio}
           />
+
           {error && <p className="text-sm text-red-600">{error}</p>}
+
           <button
             type="submit"
             disabled={!canGenerate}

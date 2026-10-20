@@ -1,28 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
   <component name="ChangeListManager">
     <list default="true" id="5c7565c7-989f-4259-ac8c-e410c034b03e" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/backend/Wav2Lip/wav2lip_runner.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/Ai-Lecture Synthesis.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/Ai-Lecture Synthesis.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/Wav2Lip/audio.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/Wav2Lip/audio.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/Wav2Lip/inference.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/Wav2Lip/inference.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/Wav2Lip/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/backend/Wav2Lip/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lectureSynthesis.db" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/model/User.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/model/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/model/database.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/model/models.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/routes/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/routes/auth.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/testLectureSynthesis.db" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_auth.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/utils.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/_metadata.json" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/_metadata.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/axios.js" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/axios.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/axios.js.map" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/axios.js.map" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/chunk-DXCIJLPC.js" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/chunk-DXCIJLPC.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/chunk-DXCIJLPC.js.map" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/chunk-DXCIJLPC.js.map" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/chunk-G3PMV62Z.js" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/chunk-G3PMV62Z.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/chunk-G3PMV62Z.js.map" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/chunk-G3PMV62Z.js.map" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/chunk-PXNUAW6A.js" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/chunk-PXNUAW6A.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/chunk-PXNUAW6A.js.map" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/chunk-PXNUAW6A.js.map" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react-dom.js" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react-dom.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react-dom.js.map" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react-dom.js.map" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react-dom_client.js" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react-dom_client.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react-dom_client.js.map" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react-dom_client.js.map" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react-router-dom.js" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react-router-dom.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react-router-dom.js.map" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react-router-dom.js.map" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react.js" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react.js.map" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react.js.map" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react_jsx-dev-runtime.js" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react_jsx-dev-runtime.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react_jsx-dev-runtime.js.map" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react_jsx-dev-runtime.js.map" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react_jsx-runtime.js" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react_jsx-runtime.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react_jsx-runtime.js.map" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react_jsx-runtime.js.map" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/src/pages/LecturerDashboard.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/src/pages/LecturerDashboard.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/src/pages/StudentDashboard.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/src/pages/StudentDashboard.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/lectureSynthesis.db" beforeDir="false" afterPath="$PROJECT_DIR$/backend/lectureSynthesis.db" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/routes/ai.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/routes/ai.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -49,6 +60,7 @@
     &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;main&quot;,
     &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/lehlo/Downloads/AI-Lecture-Synthesis - w&quot;,
     &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
   }
 }</component>
