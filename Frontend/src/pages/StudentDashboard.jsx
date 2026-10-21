@@ -12,6 +12,7 @@ import {
   sendData,
   api_url,
 } from '../lib/db.js'
+import { askChatbot } from '../lib/chat.js'
 import UploadField from '../components/UploadField.jsx'
 import InteractiveSlideSystem from '../components/InteractiveSlideSystem.jsx'
 
@@ -51,6 +52,7 @@ export default function StudentDashboard() {
   const [courseSource, setCourseSource] = useState('lecturer') // 'lecturer' | 'own'
   const [messages, setMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
+  const [chatBusy, setChatBusy] = useState(false)
   const videoRef = useRef(null) // shared with InteractiveSlideSystem below
 
   useEffect(() => {
@@ -111,7 +113,8 @@ export default function StudentDashboard() {
   formData.append('video', video)
   materials.forEach((file) => formData.append('materials', file))
   formData.append('audio_sample', audio)
-  
+  formData.append('course_name', trimmedName)
+
   try{
     const response = await sendData(formData, token)
 
@@ -153,26 +156,42 @@ export default function StudentDashboard() {
 
 }
 
-  function sendMessage() {
-    if (!chatInput.trim() || !activeCourse) return
+  async function sendMessage() {
+    const question = chatInput.trim()
+    if (!question || !activeCourse || chatBusy) return
 
-    const next = [...messages, { role: 'user', text: chatInput }]
+    // Earlier turns, minus the greeting, in the shape the backend expects
+    const history = messages
+      .slice(1)
+      .map((m) => ({ role: m.role === 'bot' ? 'assistant' : 'user', content: m.text }))
+
+    const next = [...messages, { role: 'user', text: question }]
     setChatInput('')
-    setMessages(next)
-    saveChatHistory(currentUser.id, activeCourse.name, next)
+    setMessages([...next, { role: 'bot', text: 'Thinking…' }])
+    setChatBusy(true)
 
-    // thato API work here too - can make changes to this section
-    setTimeout(() => {
-      const withReply = [
-        ...next,
-        {
-          role: 'bot',
-          text: `(Once the chatbot backend is connected, this is where the answer about ${activeCourse.name} will appear.)`,
-        },
-      ]
-      setMessages(withReply)
-      saveChatHistory(currentUser.id, activeCourse.name, withReply)
-    }, 500)
+    let reply
+    try {
+      reply = await askChatbot({
+        token,
+        // answers come from whoever generated this lecture, limited to this course
+        ownerId: activeCourse.lecturerId ?? activeCourse.studentId,
+        courseName: activeCourse.name,
+        question,
+        history,
+        onText: (text) => setMessages([...next, { role: 'bot', text }]),
+      })
+    } catch (err) {
+      reply = err.message === 'No lecture content uploaded yet'
+        ? 'This lecture was created before the chatbot was added, so there is no content to answer from. Regenerate it to enable questions.'
+        : err.message
+    } finally {
+      setChatBusy(false)
+    }
+
+    const withReply = [...next, { role: 'bot', text: reply }]
+    setMessages(withReply)
+    saveChatHistory(currentUser.id, activeCourse.name, withReply)
   }
 
   function goHome() {
@@ -441,7 +460,7 @@ export default function StudentDashboard() {
           {messages.map((m, i) => (
             <div
               key={i}
-              className={`text-sm max-w-[85%] rounded-lg px-3 py-2 ${
+              className={`text-sm max-w-[85%] rounded-lg px-3 py-2 whitespace-pre-wrap ${
                 m.role === 'bot'
                   ? 'bg-cream text-ink'
                   : 'bg-navy text-white ml-auto'
@@ -463,7 +482,8 @@ export default function StudentDashboard() {
           />
           <button
             onClick={sendMessage}
-            className="rounded-md bg-navy text-white text-sm px-3
+            disabled={chatBusy}
+            className="rounded-md bg-navy text-white text-sm px-3 disabled:opacity-30
               hover:bg-teal-deep transition-colors"
           >
             Send

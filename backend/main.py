@@ -1,7 +1,7 @@
 from fastapi import FastAPI, status
 from model.database import engine
 from model.models import Base
-from routes import auth, ai, user
+from routes import auth, ai, user, chat
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
@@ -36,3 +36,4 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(ai.router)
 app.include_router(user.router)
+app.include_router(chat.router)

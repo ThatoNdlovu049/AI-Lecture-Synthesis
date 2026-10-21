@@ -1,12 +1,13 @@
 import shutil
 import uuid
-from fastapi import APIRouter, File, UploadFile, HTTPException, status, Depends
+from fastapi import APIRouter, File, Form, UploadFile, HTTPException, status, Depends
 import asyncio
 import io
 from PyPDF2 import PdfReader
 import ollama
 import torch
 from routes.auth import get_current_user
+from routes.chat import save_lecture, add_lecture_text
 from typing import Annotated
 import os
 import sys
@@ -131,7 +132,10 @@ async def generate_audio(text : str, audio_sample : str):
 
     for i, para in enumerate(paragraphs):
         print(f"Generating paragraph {i + 1}/{len(paragraphs)}...")
-        wav = chatterbox_model.generate(
+        # Runs in a worker thread - calling it directly blocks the whole
+        # server (chat, login, everything) for the minutes TTS takes.
+        wav = await asyncio.to_thread(
+            chatterbox_model.generate,
             para,
             language_id="en",
             exaggeration=0.4,
@@ -315,7 +319,7 @@ async def startup():
 
 
 @router.post("/upload")
-async def upload_slides(user : user_dependency, video : UploadFile, audio_sample : UploadFile, materials: list[UploadFile] = File(...)):
+async def upload_slides(user : user_dependency, video : UploadFile, audio_sample : UploadFile, materials: list[UploadFile] = File(...), course_name : str = Form("Untitled lecture")):
 
     if user is None:
         raise HTTPException(status_code=400, detail="Authentication failed")
@@ -356,6 +360,10 @@ async def upload_slides(user : user_dependency, video : UploadFile, audio_sample
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Error with reading PDF content: {str(e)}")
 
+    # Saved before generation starts so the chatbot can answer about the
+    # materials while the video is still being made.
+    lecture_id = await save_lecture(user["user_id"], course_name, text)
+
     prompt = generate_prompt(text, 'english')
 
     try:
@@ -374,6 +382,7 @@ async def upload_slides(user : user_dependency, video : UploadFile, audio_sample
     except HTTPException as e:
         raise HTTPException(status_code=502, detail=f"Ollama error: {str(e)}")
 
+    await add_lecture_text(lecture_id, "script", response["message"]["content"])
 
     audio_path = await generate_audio(response["message"]["content"], audio_sample_path)
     print("Audio successfully generated")
@@ -400,6 +409,7 @@ async def upload_slides(user : user_dependency, video : UploadFile, audio_sample
     slide_filenames = generate_slides_from_materials(materials_content, slides_dir)
 
     subtitle_cues = parse_srt(srt_path)
+    await add_lecture_text(lecture_id, "transcript", " ".join(c["text"] for c in subtitle_cues))
     slide_timestamps = distribute_slide_timestamps(len(slide_filenames), subtitle_cues)
 
     slides_payload = [

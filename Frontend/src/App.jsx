@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import Navbar from './components/Navbar.jsx'
 import BrandStrip from './components/BrandStrip.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
+import ChatWidget from './components/ChatWidget.jsx'
 import Home from './pages/Home.jsx'
 import About from './pages/About.jsx'
 import GetStarted from './pages/GetStarted.jsx'
@@ -49,6 +50,7 @@ export default function App() {
         </Routes>
       </main>
       <BrandStrip />
+      <ChatWidget />
     </div>
   )
 }

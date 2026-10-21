@@ -33,7 +33,8 @@ export default function LecturerDashboard() {
   formData.append('video', video)
   materials.forEach((file) => formData.append('materials', file))
   formData.append('audio_sample', audio)
-  
+  formData.append('course_name', trimmedName)
+
   try{
     const response = await sendData(formData, token)
 
