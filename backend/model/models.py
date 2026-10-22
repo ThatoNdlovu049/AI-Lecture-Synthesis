@@ -1,5 +1,5 @@
 from model.database import Base
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey, inspect, text
 from datetime import datetime, timezone
 
 
@@ -27,6 +27,13 @@ class Lecture(Base):
     script = Column(Text)
     transcript = Column(Text)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    # Filled in by routes/lectures.py so a lecture can be found and watched again
+    job_id = Column(String, index=True)  # also the lecture's key in the frontend URL
+    status = Column(String)  # "generating" | "ready" | "failed"
+    error = Column(Text)
+    video_url = Column(String)
+    slides = Column(Text)  # JSON, same shape as the /ai/upload response
+    subtitles = Column(Text)  # JSON, same shape as the /ai/upload response
 
 
 # A lecture split into small passages. embedding is a JSON list of floats,
@@ -39,3 +46,35 @@ class LectureChunk(Base):
     source = Column(String)  # "materials" or "script"
     text = Column(Text)
     embedding = Column(Text)
+
+
+# One private note a user made on a lecture (a lecture can have many).
+# lecture_key is the key the frontend uses for that lecture (Lecture.job_id,
+# or "local:..." for older lectures that only exist in the browser).
+class LectureNote(Base):
+
+    __tablename__ = "lecture_notes"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    lecture_key = Column(String, index=True)
+    content = Column(Text)
+    video_time = Column(Float)  # seconds into the video when the note was started
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+def add_missing_columns(engine):
+    """
+    create_all() makes new tables but never adds columns to existing ones,
+    so a database created by an older version would be missing them.
+    """
+    inspector = inspect(engine)
+    with engine.begin() as connection:
+        for table in Base.metadata.sorted_tables:
+            if not inspector.has_table(table.name):
+                continue
+            existing = {c["name"] for c in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if column.name not in existing:
+                    column_type = column.type.compile(dialect=engine.dialect)
+                    connection.execute(text(f'ALTER TABLE {table.name} ADD COLUMN {column.name} {column_type}'))

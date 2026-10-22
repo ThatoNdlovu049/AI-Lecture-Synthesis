@@ -23,9 +23,12 @@ export default function Navbar() {
         </Link>
 
         {currentUser ? (
-          <nav className="flex items-center gap-8 text-sm">
+          <nav className="flex items-center gap-4 sm:gap-8 text-sm">
             <Link to={`/${currentUser.role}`} className={linkClass}>
               Dashboard
+            </Link>
+            <Link to="/lectures" className={linkClass}>
+              My lectures
             </Link>
             <Link to="/profile" className={linkClass}>
               Profile

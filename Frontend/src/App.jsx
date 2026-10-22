@@ -11,6 +11,8 @@ import Register from './pages/Register.jsx'
 import Profile from './pages/Profile.jsx'
 import LecturerDashboard from './pages/LecturerDashboard.jsx'
 import StudentDashboard from './pages/StudentDashboard.jsx'
+import MyLectures from './pages/MyLectures.jsx'
+import LecturePage from './pages/LecturePage.jsx'
 
 export default function App() {
   return (
@@ -36,6 +38,22 @@ export default function App() {
             element={
               <ProtectedRoute role="lecturer">
                 <LecturerDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/lectures"
+            element={
+              <ProtectedRoute>
+                <MyLectures />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/lectures/:key"
+            element={
+              <ProtectedRoute>
+                <LecturePage />
               </ProtectedRoute>
             }
           />

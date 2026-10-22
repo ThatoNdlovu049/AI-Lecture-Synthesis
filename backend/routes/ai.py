@@ -8,6 +8,7 @@ import ollama
 import torch
 from routes.auth import get_current_user
 from routes.chat import save_lecture, add_lecture_text
+from routes.lectures import track_progress, finish_lecture, fail_lecture
 from typing import Annotated
 import os
 import sys
@@ -122,7 +123,7 @@ def generate_prompt(text : str, language : str):
 
     return prompt
 
-async def generate_audio(text : str, audio_sample : str):
+async def generate_audio(text : str, audio_sample : str, on_progress=None):
 
     output_path = f"output/audio.wav"
 
@@ -132,6 +133,8 @@ async def generate_audio(text : str, audio_sample : str):
 
     for i, para in enumerate(paragraphs):
         print(f"Generating paragraph {i + 1}/{len(paragraphs)}...")
+        if on_progress:
+            on_progress(i, len(paragraphs))
         # Runs in a worker thread - calling it directly blocks the whole
         # server (chat, login, everything) for the minutes TTS takes.
         wav = await asyncio.to_thread(
@@ -148,11 +151,25 @@ async def generate_audio(text : str, audio_sample : str):
         wavs.append(silence)
 
     full_wav = torch.cat(wavs, dim=-1)
-    ta.save(output_path, full_wav, chatterbox_model.sr)
+    raw_path = "output/audio_raw.wav"
+    ta.save(raw_path, full_wav, chatterbox_model.sr)
+
+    # The narration comes out as quiet as the voice sample (a phone clip
+    # gave -33 dB, barely audible), so bring it to normal speech loudness
+    # before it goes into the video.
+    result = await asyncio.to_thread(
+        subprocess.run,
+        ["ffmpeg", "-y", "-i", raw_path, "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
+         "-ar", str(chatterbox_model.sr), output_path],
+        capture_output=True
+    )
+    if result.returncode != 0:
+        print("Loudness normalisation failed, using the narration as generated")
+        shutil.copyfile(raw_path, output_path)
 
     return output_path
 
-async def generate_lipsync_video(audio_path : str, video_path : str):
+async def generate_lipsync_video(audio_path : str, video_path : str, on_progress=None):
 
     if audio_path is None and video_path is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audio/video path not found")
@@ -161,7 +178,7 @@ async def generate_lipsync_video(audio_path : str, video_path : str):
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(
         None,
-        lambda : wav2lip_runner.run_wav2lip(video_path, audio_path, output_path)
+        lambda : wav2lip_runner.run_wav2lip(video_path, audio_path, output_path, on_progress=on_progress)
     )
 
     return output_path
@@ -203,7 +220,8 @@ async def burn_subtitles(video_path : str, srt : str, output_path : str, font_si
     )
     if result.returncode != 0:
         print("ffmpeg failed")
-        sys.exit(1)
+        # Was sys.exit(1), which shut down the whole server
+        raise HTTPException(status_code=500, detail="Burning subtitles into the video failed (ffmpeg)")
 
     return output_path
 
@@ -319,10 +337,15 @@ async def startup():
 
 
 @router.post("/upload")
-async def upload_slides(user : user_dependency, video : UploadFile, audio_sample : UploadFile, materials: list[UploadFile] = File(...), course_name : str = Form("Untitled lecture")):
+async def upload_slides(user : user_dependency, video : UploadFile, audio_sample : UploadFile, materials: list[UploadFile] = File(...), course_name : str = Form("Untitled lecture"), job_id : str | None = Form(None)):
 
     if user is None:
         raise HTTPException(status_code=400, detail="Authentication failed")
+
+    # The frontend sends its own job_id so it can show progress straight away
+    # (GET /ai/lectures/{job_id}); older frontends don't, so make one up.
+    job_id = job_id or str(uuid.uuid4())
+    update_progress = track_progress(job_id)
 
     materials_content = []
     for material in materials:
@@ -362,13 +385,23 @@ async def upload_slides(user : user_dependency, video : UploadFile, audio_sample
 
     # Saved before generation starts so the chatbot can answer about the
     # materials while the video is still being made.
-    lecture_id = await save_lecture(user["user_id"], course_name, text)
-
-    prompt = generate_prompt(text, 'english')
+    lecture_id = await save_lecture(user["user_id"], course_name, text, job_id)
 
     try:
-        response = await asyncio.to_thread(
-            ollama.chat,
+        return await generate_lecture(lecture_id, update_progress, text, materials_content, face_path, audio_sample_path)
+    except Exception as e:
+        fail_lecture(lecture_id, job_id, e.detail if isinstance(e, HTTPException) else str(e))
+        raise
+
+async def generate_lecture(lecture_id, update_progress, text, materials_content, face_path, audio_sample_path):
+
+    update_progress("script")
+    prompt = generate_prompt(text, 'english')
+
+    # Streamed so the progress page can show how much has been written so far
+    def write_script():
+        parts = []
+        stream = ollama.chat(
             model=model_name,
             messages=[
                 {"role": "user", "content": prompt}
@@ -378,18 +411,37 @@ async def upload_slides(user : user_dependency, video : UploadFile, audio_sample
                 "num_predict": -1,
                 "temperature": 0.7,
             },
+            stream=True,
         )
+        for i, chunk in enumerate(stream):
+            parts.append(chunk["message"]["content"])
+            if i % 20 == 0:
+                update_progress("script", len("".join(parts).split()))
+        return {"message": {"content": "".join(parts)}}
+
+    try:
+        response = await asyncio.to_thread(write_script)
     except HTTPException as e:
         raise HTTPException(status_code=502, detail=f"Ollama error: {str(e)}")
 
     await add_lecture_text(lecture_id, "script", response["message"]["content"])
 
-    audio_path = await generate_audio(response["message"]["content"], audio_sample_path)
+    audio_path = await generate_audio(
+        response["message"]["content"],
+        audio_sample_path,
+        on_progress=lambda done, total: update_progress("voice", done, total)
+    )
     print("Audio successfully generated")
     print("/generating video")
-    video_path = await generate_lipsync_video(audio_path, face_path)
+    update_progress("lipsync", detail="Preparing video")
+    video_path = await generate_lipsync_video(
+        audio_path,
+        face_path,
+        on_progress=lambda phase, done, total: update_progress("lipsync", done, total, phase)
+    )
     print("Lipsync video successfully generated")
     print("/generating subtitles")
+    update_progress("subtitles")
     srt_path = await generate_subtitles(video_path)
     print("burning subtitles to video")
     results_dir = os.path.dirname(video_path)
@@ -404,6 +456,7 @@ async def upload_slides(user : user_dependency, video : UploadFile, audio_sample
     #    above for the burned-in captions).
     # 3. Use those same timestamps to decide when each slide appears,
     #    so the slides are directly linked to the subtitles/script timing.
+    update_progress("slides")
     slide_batch_id = str(uuid.uuid4())
     slides_dir = os.path.join("output", "slides", slide_batch_id)
     slide_filenames = generate_slides_from_materials(materials_content, slides_dir)
@@ -420,6 +473,8 @@ async def upload_slides(user : user_dependency, video : UploadFile, audio_sample
         {"start": c["start"], "end": c["end"], "text": c["text"]}
         for c in subtitle_cues
     ]
+
+    finish_lecture(lecture_id, f"/results/{video_filename}", slides_payload, subtitles_payload)
 
     return {
         "lectureFileName": "Lecture 1",

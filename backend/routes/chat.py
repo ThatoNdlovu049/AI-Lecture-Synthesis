@@ -89,7 +89,7 @@ async def index_text(lecture_id : int, source : str, text : str):
     finally:
         db.close()
 
-async def save_lecture(owner_id : int, course_name : str, materials_text : str):
+async def save_lecture(owner_id : int, course_name : str, materials_text : str, job_id : str | None = None):
     """
     Stores the uploaded materials as soon as they're read, so the chatbot can
     answer about them while the video is still being generated. Never raises:
@@ -98,7 +98,13 @@ async def save_lecture(owner_id : int, course_name : str, materials_text : str):
     try:
         db = SessionLocal()
         try:
-            lecture = Lecture(owner_id=owner_id, course_name=course_name, materials_text=materials_text)
+            lecture = Lecture(
+                owner_id=owner_id,
+                course_name=course_name,
+                materials_text=materials_text,
+                job_id=job_id,
+                status="generating"
+            )
             db.add(lecture)
             db.commit()
             lecture_id = lecture.id

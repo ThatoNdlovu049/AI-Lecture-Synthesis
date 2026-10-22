@@ -64,7 +64,7 @@ def get_smoothened_boxes(boxes, T):
     return boxes
 
 
-def face_detect(images):
+def face_detect(images, on_progress=None):
     detector = face_detection.FaceAlignment(face_detection.LandmarksType._2D,
                                              flip_input=False, device=device)
 
@@ -73,8 +73,11 @@ def face_detect(images):
     while 1:
         predictions = []
         try:
-            for i in tqdm(range(0, len(images), batch_size)):
+            batch_starts = range(0, len(images), batch_size)
+            for n, i in enumerate(tqdm(batch_starts)):
                 predictions.extend(detector.get_detections_for_batch(np.array(images[i:i + batch_size])))
+                if on_progress:
+                    on_progress('Finding the face', n + 1, len(batch_starts))
         except RuntimeError:
             if batch_size == 1:
                 raise RuntimeError('Image too big to run face detection. Try lowering RESIZE_FACTOR.')
@@ -107,14 +110,14 @@ def face_detect(images):
     return results
 
 
-def datagen(frames, mels, static):
+def datagen(frames, mels, static, on_progress=None):
     img_batch, mel_batch, frame_batch, coords_batch = [], [], [], []
 
     if BOX[0] == -1:
         if not static:
-            face_det_results = face_detect(frames)
+            face_det_results = face_detect(frames, on_progress)
         else:
-            face_det_results = face_detect([frames[0]])
+            face_det_results = face_detect([frames[0]], on_progress)
     else:
         y1, y2, x1, x2 = BOX
         face_det_results = [[f[y1:y2, x1:x2], (y1, y2, x1, x2)] for f in frames]
@@ -149,10 +152,11 @@ def datagen(frames, mels, static):
         yield img_batch, mel_batch, frame_batch, coords_batch
 
 
-def run_wav2lip(face_path, audio_path, outfile_path='results/result_voice.mp4'):
+def run_wav2lip(face_path, audio_path, outfile_path='results/result_voice.mp4', on_progress=None):
     """
     Runs Wav2Lip inference. Model must already be loaded via load_wav2lip_model().
     Returns the path to the generated video.
+    on_progress(phase, done, total), if given, is called after each batch.
     """
     if _model is None:
         raise RuntimeError("Wav2Lip model not loaded — call load_wav2lip_model() first.")
@@ -217,11 +221,13 @@ def run_wav2lip(face_path, audio_path, outfile_path='results/result_voice.mp4'):
 
     full_frames = full_frames[:len(mel_chunks)]
     batch_size = WAV2LIP_BATCH_SIZE
-    gen = datagen(full_frames.copy(), mel_chunks, static)
+    gen = datagen(full_frames.copy(), mel_chunks, static, on_progress)
+    total_batches = int(np.ceil(float(len(mel_chunks)) / batch_size))
 
     out = None
-    for i, (img_batch, mel_batch, frames, coords) in enumerate(
-            tqdm(gen, total=int(np.ceil(float(len(mel_chunks)) / batch_size)))):
+    for i, (img_batch, mel_batch, frames, coords) in enumerate(tqdm(gen, total=total_batches)):
+        if on_progress:
+            on_progress('Animating the mouth', i, total_batches)
         if i == 0:
             frame_h, frame_w = full_frames[0].shape[:-1]
             out = cv2.VideoWriter('temp/result.avi',
@@ -243,6 +249,8 @@ def run_wav2lip(face_path, audio_path, outfile_path='results/result_voice.mp4'):
 
     out.release()
 
+    if on_progress:
+        on_progress('Saving the video', total_batches, total_batches)
     command = 'ffmpeg -y -i "{}" -i "{}" -strict -2 -q:v 1 "{}"'.format(
         local_audio_path, 'temp/result.avi', outfile_path)
     subprocess.call(command, shell=platform.system() != 'Windows')

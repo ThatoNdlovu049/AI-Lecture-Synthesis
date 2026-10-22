@@ -1,7 +1,7 @@
 from fastapi import FastAPI, status
 from model.database import engine
-from model.models import Base
-from routes import auth, ai, user, chat
+from model.models import Base, add_missing_columns
+from routes import auth, ai, user, chat, lectures
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
@@ -9,6 +9,7 @@ import os
 
 app = FastAPI()
 Base.metadata.create_all(bind=engine)
+add_missing_columns(engine)
 
 WAV2LIP_DIR = os.path.join(os.path.dirname(__file__), "Wav2Lip")
 os.makedirs(os.path.join(WAV2LIP_DIR, "results"), exist_ok=True)
@@ -37,3 +38,5 @@ app.include_router(auth.router)
 app.include_router(ai.router)
 app.include_router(user.router)
 app.include_router(chat.router)
+app.include_router(lectures.router)
+app.include_router(lectures.notes_router)

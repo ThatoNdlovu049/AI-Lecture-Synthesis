@@ -1,31 +1,30 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
-import {
-  getChatHistory,
-  getCourseByName,
-  getCourses,
-  getStudentCourseByName,
-  getStudentProgress,
-  recordCourseAccess,
-  saveChatHistory,
-  saveStudentCourse,
-  sendData,
-  api_url,
-} from '../lib/db.js'
-import { askChatbot } from '../lib/chat.js'
+import { getStudentProgress } from '../lib/db.js'
+import { listLectures, startLectureGeneration } from '../lib/lectures.js'
 import UploadField from '../components/UploadField.jsx'
-import InteractiveSlideSystem from '../components/InteractiveSlideSystem.jsx'
+import LectureCard from '../components/LectureCard.jsx'
 
 export default function StudentDashboard() {
-  const { currentUser } = useAuth()
-  const { token } = useAuth()
+  const { currentUser, token } = useAuth()
+  const navigate = useNavigate()
 
-  // 'home' | 'find' | 'create' | 'course'
+  // 'home' | 'find' | 'create' - a lecture itself opens on its own page (/lectures/:key)
   const [screen, setScreen] = useState('home')
 
-  const [progressList, setProgressList] = useState(() =>
+  const [progressList] = useState(() =>
     getStudentProgress(currentUser.id)
   )
+
+  // Every lecture this student can watch: lecturers' and their own
+  const [lectures, setLectures] = useState([])
+  useEffect(() => {
+    listLectures(token, currentUser).then(setLectures)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, currentUser?.id])
+
+  const ownLectures = lectures.filter((l) => l.is_mine)
 
   // ---- Find an existing (lecturer-published) lecture ----
   const [query, setQuery] = useState('')
@@ -33,8 +32,8 @@ export default function StudentDashboard() {
 
   const suggestions =
     query.trim().length > 0
-      ? getCourses().filter((c) =>
-          c.name.toLowerCase().includes(query.trim().toLowerCase())
+      ? lectures.filter((l) =>
+          !l.is_mine && l.course_name.toLowerCase().includes(query.trim().toLowerCase())
         )
       : []
 
@@ -43,49 +42,15 @@ export default function StudentDashboard() {
   const [video, setVideo] = useState(null)
   const [materials, setMaterials] = useState([])
   const [audio, setAudio] = useState(null)
-  const [generating, setGenerating] = useState(false)
-  const [error, setError] = useState('')
-  const canGenerate = Boolean( newName.trim() && video && materials.length > 0 && audio && !generating )
+  const canGenerate = Boolean( newName.trim() && video && materials.length > 0 && audio )
 
-  // ---- Whichever course is currently being viewed ----
-  const [activeCourse, setActiveCourse] = useState(null)
-  const [courseSource, setCourseSource] = useState('lecturer') // 'lecturer' | 'own'
-  const [messages, setMessages] = useState([])
-  const [chatInput, setChatInput] = useState('')
-  const [chatBusy, setChatBusy] = useState(false)
-  const videoRef = useRef(null) // shared with InteractiveSlideSystem below
-
-  useEffect(() => {
-    if (!activeCourse) return
-    recordCourseAccess(currentUser.id, activeCourse.name)
-    setProgressList(getStudentProgress(currentUser.id))
-
-    const saved = getChatHistory(currentUser.id, activeCourse.name)
-    setMessages(
-      saved.length > 0
-        ? saved
-        : [{ role: 'bot', text: 'Ask me anything about this lecture.' }]
-    )
-  }, [activeCourse, currentUser.id])
-
-  // Checks lecturer-published courses first, then this student's own
-  // generated ones - so clicking a "courses in progress" entry works
-  // no matter which kind it originally was.
+  // Checks lecturers' lectures first, then this student's own - so
+  // clicking a "courses in progress" entry works whichever kind it was.
   function openCourseByName(name) {
-    const lecturerCourse = getCourseByName(name)
-    if (lecturerCourse) {
-      setFindError('')
-      setCourseSource('lecturer')
-      setActiveCourse(lecturerCourse)
-      setScreen('course')
-      return
-    }
-    const ownCourse = getStudentCourseByName(currentUser.id, name)
-    if (ownCourse) {
-      setFindError('')
-      setCourseSource('own')
-      setActiveCourse(ownCourse)
-      setScreen('course')
+    const sameName = (l) => l.course_name.toLowerCase() === name.toLowerCase()
+    const lecture = lectures.find((l) => !l.is_mine && sameName(l)) || lectures.find(sameName)
+    if (lecture) {
+      navigate(`/lectures/${lecture.key}`)
       return
     }
     setFindError(`No lecture found for "${name}".`)
@@ -98,100 +63,20 @@ export default function StudentDashboard() {
     openCourseByName(trimmed)
   }
 
-  async function handleGenerateOwn(e) {
-  e.preventDefault()
-  const trimmedName = newName.trim()
-  if (!trimmedName) return
-  if (!video) return
-  if (!materials.length) return
-  if (!audio) return
-
-  setGenerating(true)
-  setError('')
-
-  const formData = new FormData()
-  formData.append('video', video)
-  materials.forEach((file) => formData.append('materials', file))
-  formData.append('audio_sample', audio)
-  formData.append('course_name', trimmedName)
-
-  try{
-    const response = await sendData(formData, token)
-
-    if (!response.ok) {
-      setError(response.error)
-      return
-      
-    }
-    const course = saveStudentCourse({
-    name: trimmedName,
-    studentId: currentUser.id,
-    videoFileName: video.name,
-    materialCount: materials.length,
-    audio_name: audio.name,
-    lectureFileName: response.data.lectureFileName,
-    slidesFileName: response.data.slidesFileName,
-    videoUrl: response.data.videoUrl,
-    slides: response.data.slides,
-    subtitles: response.data.subtitles,
-    createdAt: new Date().toISOString(),
-  })
-
-    setNewName('')
-    setVideo(null)
-    setMaterials([])
-    setAudio(null)
-
-    setCourseSource('own')
-    setActiveCourse(course)
-    setScreen('course')
-
-  }catch(err){
-    console.log(err)
-    setError('Something went wrong. Please try again....')
-  }finally{
-    setGenerating(false)
-  }
-    
-
-}
-
-  async function sendMessage() {
-    const question = chatInput.trim()
-    if (!question || !activeCourse || chatBusy) return
-
-    // Earlier turns, minus the greeting, in the shape the backend expects
-    const history = messages
-      .slice(1)
-      .map((m) => ({ role: m.role === 'bot' ? 'assistant' : 'user', content: m.text }))
-
-    const next = [...messages, { role: 'user', text: question }]
-    setChatInput('')
-    setMessages([...next, { role: 'bot', text: 'Thinking…' }])
-    setChatBusy(true)
-
-    let reply
-    try {
-      reply = await askChatbot({
-        token,
-        // answers come from whoever generated this lecture, limited to this course
-        ownerId: activeCourse.lecturerId ?? activeCourse.studentId,
-        courseName: activeCourse.name,
-        question,
-        history,
-        onText: (text) => setMessages([...next, { role: 'bot', text }]),
-      })
-    } catch (err) {
-      reply = err.message === 'No lecture content uploaded yet'
-        ? 'This lecture was created before the chatbot was added, so there is no content to answer from. Regenerate it to enable questions.'
-        : err.message
-    } finally {
-      setChatBusy(false)
-    }
-
-    const withReply = [...next, { role: 'bot', text: reply }]
-    setMessages(withReply)
-    saveChatHistory(currentUser.id, activeCourse.name, withReply)
+  // Goes straight to the lecture's page, which shows progress while it
+  // generates and becomes the video player when it's done.
+  function handleGenerateOwn(e) {
+    e.preventDefault()
+    if (!canGenerate) return
+    const key = startLectureGeneration({
+      token,
+      user: currentUser,
+      courseName: newName.trim(),
+      video,
+      materials,
+      audio,
+    })
+    navigate(`/lectures/${key}`)
   }
 
   function goHome() {
@@ -205,7 +90,7 @@ export default function StudentDashboard() {
     return (
       <div className="max-w-xl mx-auto px-6 py-10">
         <p className="font-display italic text-teal-deep">
-          Welcome, {currentUser.firstName}
+          Welcome, {currentUser.first_name ?? currentUser.firstName}
         </p>
         <h1 className="font-display text-3xl text-navy mt-1 mb-10">
           Your dashboard
@@ -237,6 +122,23 @@ export default function StudentDashboard() {
                     {new Date(p.lastAccessedAt).toLocaleDateString()}
                   </p>
                 </button>
+              ))}
+            </div>
+            {findError && <p className="text-sm text-red-600 mt-3">{findError}</p>}
+          </div>
+        )}
+
+        {ownLectures.length > 0 && (
+          <div className="mb-14">
+            <div className="flex items-baseline justify-between mb-4">
+              <h2 className="font-display text-lg text-navy">Lectures you generated</h2>
+              <Link to="/lectures" className="text-sm text-ink/50 hover:text-teal-deep transition-colors">
+                See all lectures →
+              </Link>
+            </div>
+            <div className="space-y-3">
+              {ownLectures.slice(0, 3).map((l) => (
+                <LectureCard key={l.key} lecture={l} />
               ))}
             </div>
           </div>
@@ -306,15 +208,16 @@ export default function StudentDashboard() {
 
           {suggestions.length > 0 && (
             <div className="space-y-2">
-              {suggestions.map((c) => (
+              {suggestions.map((l) => (
                 <button
-                  key={c.name}
+                  key={l.key}
                   type="button"
-                  onClick={() => openCourseByName(c.name)}
-                  className="w-full text-left rounded-lg border-2 border-navy/15 bg-paper px-4 py-2.5
+                  onClick={() => navigate(`/lectures/${l.key}`)}
+                  className="w-full flex items-baseline justify-between gap-3 text-left rounded-lg border-2 border-navy/15 bg-paper px-4 py-2.5
                     hover:border-teal transition-colors"
                 >
-                  {c.name}
+                  <span>{l.course_name}</span>
+                  <span className="text-xs text-ink/50">{l.owner_name}</span>
                 </button>
               ))}
             </div>
@@ -338,158 +241,66 @@ export default function StudentDashboard() {
   }
 
   // ---------------- Screen: generate your own lecture ----------------
-  if (screen === 'create') {
-    return (
-      <div className="max-w-xl mx-auto px-6 py-10">
-        <button
-          onClick={goHome}
-          className="text-sm text-ink/50 hover:text-teal-deep transition-colors mb-6"
-        >
-          ← Back to dashboard
-        </button>
-
-        <h1 className="font-display text-3xl text-navy mb-8">
-          Generate your own lecture
-        </h1>
-
-        <form onSubmit={handleGenerateOwn} className="space-y-6">
-          <div>
-            <label className="text-sm font-medium">Lecture name</label>
-            <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="e.g. My Database Notes"
-              className="mt-1 w-full rounded-lg border-2 border-navy/15 bg-paper px-4 py-2.5
-                outline-none focus:border-teal transition-colors"
-            />
-          </div>
-
-          <UploadField
-            label="Your video"
-            hint="~30 SEC CLIP"
-            accept="video/*"
-            onFileSelect={setVideo}
-          />
-
-          <UploadField
-            label="Your materials / notes"
-            hint="MULTIPLE FILES"
-            accept=".pdf,.docx"
-            multiple
-            onFilesSelect={setMaterials}
-          />
-
-          <UploadField
-            label="Audio sample"
-            hint="~5 seconds audio sample"
-            accept="audio/*, .mp4, .m4a"
-            onFileSelect={setAudio}
-          />
-
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={!canGenerate}
-            className="w-full rounded-lg bg-navy text-white font-medium py-3
-              disabled:opacity-30 disabled:cursor-not-allowed hover:bg-teal-deep transition-colors"
-          >
-            {generating ? 'Generating lecture…' : 'Generate lecture & slides'}
-          </button>
-        </form>
-      </div>
-    )
-  }
-
-  // ---------------- Screen: course view (lecture stays left, chatbot stays right) ----------------
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10 grid lg:grid-cols-[1fr_340px] gap-6">
-      <div className="space-y-6">
-        <div className="flex items-baseline justify-between">
-          <div>
-            <p className="font-display italic text-teal-deep">
-              {activeCourse.name}
-              {courseSource === 'own' && (
-                <span className="ml-2 text-xs rounded-full bg-teal text-white px-2.5 py-0.5 align-middle not-italic">
-                  Your lecture
-                </span>
-              )}
-            </p>
-            <h1 className="font-display text-2xl text-navy">
-              {activeCourse.lectureFileName}
-            </h1>
-          </div>
-          <button
-            onClick={goHome}
-            className="text-sm text-ink/50 hover:text-teal-deep transition-colors"
-          >
-            ← Back to dashboard
-          </button>
-        </div>
+    <div className="max-w-xl mx-auto px-6 py-10">
+      <button
+        onClick={goHome}
+        className="text-sm text-ink/50 hover:text-teal-deep transition-colors mb-6"
+      >
+        ← Back to dashboard
+      </button>
 
-        <div className="aspect-video rounded-xl bg-navy flex items-center justify-center border-2 border-navy/15 overflow-hidden">
-          {activeCourse.videoUrl ? (
-            <video ref={videoRef} src={`${api_url}${activeCourse.videoUrl}`} controls className='w-full h-full' />
-          ) : (
-            <span className="text-white/50 text-sm">
-              {activeCourse.lectureFileName} — video player
-            </span>
-          )} 
-        </div>
+      <h1 className="font-display text-3xl text-navy mb-8">
+        Generate your own lecture
+      </h1>
 
+      <form onSubmit={handleGenerateOwn} className="space-y-6">
         <div>
-          <h2 className="font-display text-sm mb-2">
-            {activeCourse.slidesFileName}
-          </h2>
-          <InteractiveSlideSystem
-            videoRef={videoRef}
-            slides={activeCourse.slides}
-            subtitles={activeCourse.subtitles}
-          />
-        </div>
-      </div>
-
-      <aside className="rounded-xl border-2 border-navy/15 bg-paper flex flex-col h-[600px]">
-        <div className="px-4 py-3 border-b border-navy/15">
-          <h2 className="font-display text-sm">
-            Ask me anything about this lecture
-          </h2>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-          {messages.map((m, i) => (
-            <div
-              key={i}
-              className={`text-sm max-w-[85%] rounded-lg px-3 py-2 whitespace-pre-wrap ${
-                m.role === 'bot'
-                  ? 'bg-cream text-ink'
-                  : 'bg-navy text-white ml-auto'
-              }`}
-            >
-              {m.text}
-            </div>
-          ))}
-        </div>
-
-        <div className="p-3 border-t border-navy/15 flex gap-2">
+          <label className="text-sm font-medium">Lecture name</label>
           <input
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-            placeholder="Ask a question..."
-            className="flex-1 rounded-md border-2 border-navy/15 px-3 py-2 text-sm outline-none
-              focus:border-teal transition-colors"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="e.g. My Database Notes"
+            className="mt-1 w-full rounded-lg border-2 border-navy/15 bg-paper px-4 py-2.5
+              outline-none focus:border-teal transition-colors"
           />
-          <button
-            onClick={sendMessage}
-            disabled={chatBusy}
-            className="rounded-md bg-navy text-white text-sm px-3 disabled:opacity-30
-              hover:bg-teal-deep transition-colors"
-          >
-            Send
-          </button>
         </div>
-      </aside>
+
+        <UploadField
+          label="Your video"
+          hint="~30 SEC CLIP"
+          accept="video/*"
+          onFileSelect={setVideo}
+        />
+
+        <UploadField
+          label="Your materials / notes"
+          hint="MULTIPLE FILES"
+          accept=".pdf,.docx"
+          multiple
+          onFilesSelect={setMaterials}
+        />
+
+        <UploadField
+          label="Audio sample"
+          hint="~5 seconds audio sample"
+          accept="audio/*, .mp4, .m4a"
+          onFileSelect={setAudio}
+        />
+
+        <button
+          type="submit"
+          disabled={!canGenerate}
+          className="w-full rounded-lg bg-navy text-white font-medium py-3
+            disabled:opacity-30 disabled:cursor-not-allowed hover:bg-teal-deep transition-colors"
+        >
+          Generate lecture & slides
+        </button>
+        <p className="text-xs text-ink/50 text-center">
+          You'll be taken to the lecture's page, where you can follow each step. It usually
+          takes 45–90 minutes on this computer.
+        </p>
+      </form>
     </div>
   )
 }
