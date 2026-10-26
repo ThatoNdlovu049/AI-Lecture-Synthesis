@@ -483,28 +483,5 @@ async def generate_lecture(lecture_id, update_progress, text, materials_content,
         "slides": slides_payload,
         "subtitles": subtitles_payload,
     }
-@router.post("/script")
-async def check_generated_lecture(file : UploadFile, language : str):
 
-    text = await file.read()
-    text = get_text_from_pdf(text)
-    prompt = generate_prompt(text, language)
-
-    try:
-        response = await asyncio.to_thread(
-            ollama.chat,
-            model=model_name,
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
-    except Exception as e:
-        print(f"Ollama error: {e}")
-        raise HTTPException(status_code=502, detail=f"Ollama error: {str(e)}")
-
-    print("Text successfully generated from ai")
-
-    path = await generate_audio(response["message"]["content"], "output/audio_sample.mp4")
-
-    return {"script": response["message"]["content"]}
 
