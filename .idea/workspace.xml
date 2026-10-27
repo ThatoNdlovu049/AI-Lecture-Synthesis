@@ -30,6 +30,7 @@
       <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react_jsx-dev-runtime.js.map" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react_jsx-dev-runtime.js.map" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react_jsx-runtime.js" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react_jsx-runtime.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react_jsx-runtime.js.map" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/node_modules/.vite/deps/react_jsx-runtime.js.map" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Frontend/src/lib/lectures.js" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/src/lib/lectures.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Frontend/src/pages/LecturerDashboard.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/src/pages/LecturerDashboard.jsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Frontend/src/pages/StudentDashboard.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/Frontend/src/pages/StudentDashboard.jsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/lectureSynthesis.db" beforeDir="false" afterPath="$PROJECT_DIR$/backend/lectureSynthesis.db" afterDir="false" />
@@ -58,9 +59,10 @@
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;feature/lecture-chatbot&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
     &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;C:/Users/lehlo/Downloads/AI-Lecture-Synthesis - w&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/lehlo/Documents/AI-Lecture-Synthesis&quot;,
     &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
   }
 }</component>

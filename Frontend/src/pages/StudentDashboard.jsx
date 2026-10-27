@@ -42,6 +42,7 @@ export default function StudentDashboard() {
   const [video, setVideo] = useState(null)
   const [materials, setMaterials] = useState([])
   const [audio, setAudio] = useState(null)
+  const [language, setLanguage] = useState("english")
   const canGenerate = Boolean( newName.trim() && video && materials.length > 0 && audio )
 
   // Checks lecturers' lectures first, then this student's own - so
@@ -75,6 +76,7 @@ export default function StudentDashboard() {
       video,
       materials,
       audio,
+      language
     })
     navigate(`/lectures/${key}`)
   }
@@ -264,6 +266,20 @@ export default function StudentDashboard() {
             className="mt-1 w-full rounded-lg border-2 border-navy/15 bg-paper px-4 py-2.5
               outline-none focus:border-teal transition-colors"
           />
+        </div>
+
+        <div>
+          <label htmlFor="language">Language: </label>
+          <select
+            id="language"
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+          >
+            <option value="english">English</option>
+            <option value="chinese">Chinese</option>
+            <option value="dutch">Dutch</option>
+          </select>
+          <p>Selected: {language}</p>
         </div>
 
         <UploadField

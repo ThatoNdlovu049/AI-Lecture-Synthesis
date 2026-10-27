@@ -27,7 +27,7 @@ export function getPendingUpload(key) {
 
 // Starts generating a lecture and returns its key straight away. The
 // request keeps running in the background while the user watches progress.
-export function startLectureGeneration({ token, user, courseName, video, materials, audio }) {
+export function startLectureGeneration({ token, user, courseName, video, materials, audio, language }) {
   const key = crypto.randomUUID()
 
   const formData = new FormData()
@@ -36,6 +36,7 @@ export function startLectureGeneration({ token, user, courseName, video, materia
   formData.append('audio_sample', audio)
   formData.append('course_name', courseName)
   formData.append('job_id', key)
+  formData.append('language', language)
 
   pendingUploads[key] = { courseName }
 

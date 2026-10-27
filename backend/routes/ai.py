@@ -123,7 +123,15 @@ def generate_prompt(text : str, language : str):
 
     return prompt
 
-async def generate_audio(text : str, audio_sample : str, on_progress=None):
+async def generate_audio(text : str, audio_sample : str, language : str, on_progress=None):
+
+    language_ids = {
+        "english" : "en",
+        "french" : "fr",
+        "chinese" : "zh",
+        "dutch" : "nl"
+    }
+    language_id = language_ids[language.lower()]
 
     output_path = f"output/audio.wav"
 
@@ -140,7 +148,7 @@ async def generate_audio(text : str, audio_sample : str, on_progress=None):
         wav = await asyncio.to_thread(
             chatterbox_model.generate,
             para,
-            language_id="en",
+            language_id=language_id,
             exaggeration=0.4,
             cfg_weight=0.35,
             audio_prompt_path= audio_sample
@@ -337,7 +345,7 @@ async def startup():
 
 
 @router.post("/upload")
-async def upload_slides(user : user_dependency, video : UploadFile, audio_sample : UploadFile, materials: list[UploadFile] = File(...), course_name : str = Form("Untitled lecture"), job_id : str | None = Form(None)):
+async def upload_slides(user : user_dependency, video : UploadFile, audio_sample : UploadFile, materials: list[UploadFile] = File(...), course_name : str = Form("Untitled lecture"), job_id : str | None = Form(None), language : str = "english"):
 
     if user is None:
         raise HTTPException(status_code=400, detail="Authentication failed")
@@ -388,15 +396,15 @@ async def upload_slides(user : user_dependency, video : UploadFile, audio_sample
     lecture_id = await save_lecture(user["user_id"], course_name, text, job_id)
 
     try:
-        return await generate_lecture(lecture_id, update_progress, text, materials_content, face_path, audio_sample_path)
+        return await generate_lecture(lecture_id, update_progress, text, materials_content, face_path, audio_sample_path, language)
     except Exception as e:
         fail_lecture(lecture_id, job_id, e.detail if isinstance(e, HTTPException) else str(e))
         raise
 
-async def generate_lecture(lecture_id, update_progress, text, materials_content, face_path, audio_sample_path):
+async def generate_lecture(lecture_id, update_progress, text, materials_content, face_path, audio_sample_path, language):
 
     update_progress("script")
-    prompt = generate_prompt(text, 'english')
+    prompt = generate_prompt(text, language)
 
     # Streamed so the progress page can show how much has been written so far
     def write_script():
@@ -429,6 +437,7 @@ async def generate_lecture(lecture_id, update_progress, text, materials_content,
     audio_path = await generate_audio(
         response["message"]["content"],
         audio_sample_path,
+        language,
         on_progress=lambda done, total: update_progress("voice", done, total)
     )
     print("Audio successfully generated")

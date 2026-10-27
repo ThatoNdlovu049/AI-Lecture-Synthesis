@@ -19,6 +19,7 @@ export default function LecturerDashboard() {
   const [materials, setMaterials] = useState([])
   const [video, setVideo] = useState (null)
   const [audio, setAudio] = useState(null)
+  const [language, setLanguage] = useState("english")
 
   const canGenerate = Boolean( courseName.trim() && materials.length > 0 && video && audio )
 
@@ -34,6 +35,7 @@ export default function LecturerDashboard() {
       video,
       materials,
       audio,
+      language
     })
     navigate(`/lectures/${key}`)
   }
@@ -79,6 +81,20 @@ export default function LecturerDashboard() {
             className="mt-1 w-full sm:w-64 rounded-lg border-2 border-navy/15 bg-paper px-4 py-2.5
               outline-none focus:border-teal transition-colors"
           />
+        </div>
+
+        <div>
+          <label htmlFor="language">Language: </label>
+          <select
+            id="language"
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+          >
+            <option value="english">English</option>
+            <option value="chinese">Chinese</option>
+            <option value="dutch">Dutch</option>
+          </select>
+          <p>Selected: {language}</p>
         </div>
 
         <UploadField
