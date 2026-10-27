@@ -123,15 +123,17 @@ def generate_prompt(text : str, language : str):
 
     return prompt
 
+# Chatterbox and AssemblyAI use the same short codes for these languages
+LANGUAGE_IDS = {
+    "english" : "en",
+    "french" : "fr",
+    "chinese" : "zh",
+    "dutch" : "nl"
+}
+
 async def generate_audio(text : str, audio_sample : str, language : str, on_progress=None):
 
-    language_ids = {
-        "english" : "en",
-        "french" : "fr",
-        "chinese" : "zh",
-        "dutch" : "nl"
-    }
-    language_id = language_ids[language.lower()]
+    language_id = LANGUAGE_IDS[language.lower()]
 
     output_path = f"output/audio.wav"
 
@@ -191,12 +193,15 @@ async def generate_lipsync_video(audio_path : str, video_path : str, on_progress
 
     return output_path
 
-async def generate_subtitles(video_path: str):
+async def generate_subtitles(video_path: str, language : str = "english"):
 
+    # Without a language code AssemblyAI assumes English and mangles
+    # Chinese or Dutch narration
+    config = ai.TranscriptionConfig(language_code=LANGUAGE_IDS[language.lower()])
     loop = asyncio.get_event_loop()
     transcript = await loop.run_in_executor(
         None,
-        lambda: ai.Transcriber().transcribe(video_path)
+        lambda: ai.Transcriber().transcribe(video_path, config=config)
     )
     subtitles = transcript.export_subtitles_srt()
 
@@ -207,9 +212,13 @@ async def generate_subtitles(video_path: str):
 
     return srt_path
 
-async def burn_subtitles(video_path : str, srt : str, output_path : str, font_size : int = 12):
+async def burn_subtitles(video_path : str, srt : str, output_path : str, font_size : int = 12, language : str = "english"):
 
-    vf = f"subtitles='{srt}': force_style='FontSize={font_size}'"
+    style = f"FontSize={font_size}"
+    # The default font has no Chinese characters, so they burn in as boxes
+    if language.lower() == "chinese":
+        style += ",FontName=Microsoft YaHei"
+    vf = f"subtitles='{srt}': force_style='{style}'"
 
     cmd = [
         "ffmpeg",
@@ -345,7 +354,7 @@ async def startup():
 
 
 @router.post("/upload")
-async def upload_slides(user : user_dependency, video : UploadFile, audio_sample : UploadFile, materials: list[UploadFile] = File(...), course_name : str = Form("Untitled lecture"), job_id : str | None = Form(None), language : str = "english"):
+async def upload_slides(user : user_dependency, video : UploadFile, audio_sample : UploadFile, materials: list[UploadFile] = File(...), course_name : str = Form("Untitled lecture"), job_id : str | None = Form(None), language : str = Form("english")):
 
     if user is None:
         raise HTTPException(status_code=400, detail="Authentication failed")
@@ -451,11 +460,11 @@ async def generate_lecture(lecture_id, update_progress, text, materials_content,
     print("Lipsync video successfully generated")
     print("/generating subtitles")
     update_progress("subtitles")
-    srt_path = await generate_subtitles(video_path)
+    srt_path = await generate_subtitles(video_path, language)
     print("burning subtitles to video")
     results_dir = os.path.dirname(video_path)
     final_video_path = os.path.join(results_dir, f"final_{os.path.basename(video_path)}")
-    await burn_subtitles(video_path, srt_path, final_video_path)
+    await burn_subtitles(video_path, srt_path, final_video_path, language=language)
 
     video_filename = os.path.basename(final_video_path)
 
